@@ -7,9 +7,9 @@ app = Flask(__name__)
 
 # ─── Config ───────────────────────────────────────────────────
 VERIFY_TOKEN = "marist_bot_token"
-WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
-PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+WHATSAPP_TOKEN = (os.environ.get("WHATSAPP_TOKEN") or "").strip()
+PHONE_NUMBER_ID = (os.environ.get("PHONE_NUMBER_ID") or "").strip()
+ANTHROPIC_API_KEY = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 
 # Maria's number for alerts
@@ -128,7 +128,7 @@ STYLE
 
 # ─── Send WhatsApp message ────────────────────────────────────
 def send_whatsapp_message(to, message):
-    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
@@ -140,9 +140,13 @@ def send_whatsapp_message(to, message):
         "text": {"body": message}
     }
     try:
-        response = requests.post(url, json=payload, headers=headers)
-        print(f"Message sent: {response.status_code}")
-        return response.status_code == 200
+        response = requests.post(url, json=payload, headers=headers, timeout=20)
+        if response.status_code == 200:
+            print("Message sent: 200")
+            return True
+        # Show WhatsApp's reason (never prints the token)
+        print(f"WhatsApp send error: {response.status_code} {response.text[:500]}")
+        return False
     except Exception as e:
         print(f"Error sending message: {e}")
         return False
