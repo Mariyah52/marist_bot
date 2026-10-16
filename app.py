@@ -1,6 +1,8 @@
 import os
 import re
 import requests
+import time
+from collections import deque
 from flask import Flask, request
 
 app = Flask(__name__)
@@ -42,7 +44,9 @@ GRATITUDE_WORDS = [
 
 HIRE_WORDS = [
     'hire', 'hiring', 'price', 'pricing', 'quote', 'cost', 'kitna lagega', 'kitne ka',
-    'charges', 'collaborate', 'banwana', 'bnwana', 'project banwana', 'order dena'
+    'charges', 'collaborate', 'banwana', 'bnwana', 'project banwana', 'order dena',
+    'make this for me', 'make it for me', 'make this fr me', 'make it fr me', 'build this for me',
+    'build it for me', 'can you build', 'can you make', 'bana do', 'bna do', 'bana dein', 'bna dein'
 ]
 
 # ─── Reply when someone may be in danger ──────────────────────
@@ -134,9 +138,13 @@ LANGUAGE
   for the rest of the chat until they ask otherwise.
 - Never use Urdu script.
 
-STYLE
-- Warm, caring, strong and casual, like a supportive elder sister or mentor.
-- Short replies: 2-4 sentences. WhatsApp-friendly, an emoji or two is fine.
+STYLE: chat like a real person on WhatsApp, not like an article.
+- Keep every reply SHORT: 1-3 short sentences, under 50 words.
+- Never use lists, numbered steps, bullet points, headings or bold text.
+- Give one idea at a time. If there is more to say, wait for their reply.
+- Ask at most ONE question, and not in every message.
+- Don't repeat greetings or re-introduce yourself mid-conversation.
+- Warm, caring and casual, like a supportive mentor. One emoji at most.
 - Never invent prices, delivery dates or guarantees. Pricing needs a chat with Maria."""
 
     try:
@@ -150,7 +158,7 @@ STYLE
         
         payload = {
             "model": ANTHROPIC_MODEL,
-            "max_tokens": 300,
+            "max_tokens": 160,
             "system": system_prompt,
             "messages": messages
         }
@@ -166,7 +174,8 @@ STYLE
         if response.status_code != 200:
             print(f"Claude HTTP error: {response.status_code} {data}")
             raise RuntimeError("Claude error")
-        return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
+        text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
+        return re.sub(r"\*+", "", text)
     except Exception as e:
         print(f"Claude error: {e}")
         return "Sorry, I'm not available for a little while. Please try again soon! 💛"
@@ -215,6 +224,7 @@ def is_hire_query(text):
 
 # ─── Conversation memory (simple in-memory) ───────────────────
 conversation_store = {}
+SEEN_IDS = deque(maxlen=500)
 
 # ─── Webhook ─────────────────────────────────────────────────
 @app.route('/webhook', methods=['GET', 'POST', 'HEAD'])
@@ -240,6 +250,19 @@ def webhook():
                 return 'OK', 200
             
             message_data = value['messages'][0]
+
+            # Meta re-sends a message if we answer slowly (e.g. after the free
+            # server wakes up). Reply to each message only once, and skip old ones.
+            msg_id = message_data.get('id')
+            if msg_id in SEEN_IDS:
+                return 'OK', 200
+            SEEN_IDS.append(msg_id)
+            try:
+                if time.time() - int(message_data.get('timestamp', 0)) > 300:
+                    print(f"Skipping old message {msg_id}")
+                    return 'OK', 200
+            except ValueError:
+                pass
             from_number = message_data['from']
             msg_type = message_data.get('type', '')
             
