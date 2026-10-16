@@ -46,6 +46,15 @@ HIRE_WORDS = [
 ]
 
 # ─── Reply when someone may be in danger ──────────────────────
+SERIOUS_REPLY_EN = (
+    "Thank you for telling me, that took courage 💛 Your life matters a lot, "
+    "and you don't have to carry this alone.\n\n"
+    "I'm an AI assistant, so right now the most important thing is to talk to a real person: "
+    "someone you trust, or the Umang helpline: 0311 7786264.\n"
+    "If you are in immediate danger, please call 1122.\n\n"
+    "Maria has been informed too. 🤍"
+)
+
 SERIOUS_REPLY = (
     "Aap ne mujhe bataya, yeh himmat ki baat hai 💛 Aap ki zindagi bohat qeemti hai "
     "aur aap ko yeh sab akele nahi uthana.\n\n"
@@ -54,6 +63,38 @@ SERIOUS_REPLY = (
     "Agar foran khatra ho to 1122 par call karein.\n\n"
     "Maria ko bhi bata diya gaya hai. 🤍"
 )
+
+GRATITUDE_RESPONSES_EN = [
+    "Aww, that made my day! 🥰 Wishing you lots of success, you've got this!",
+    "Thank you so much 💛 Your kind words mean a lot. Take care!",
+    "So sweet of you! 🌸 Keep going, good things are coming your way!"
+]
+
+HIRE_REPLY_EN = ("Love that! 🌟 Taking your business further with automation and AI is a great move. "
+                 "Maria builds WhatsApp bots, business software, AI assistants and dashboards.\n\n"
+                 "Chat with her directly here:\n"
+                 "👉 wa.me/923153205484\n\n"
+                 "She'll be happy to help! 💛")
+
+HIRE_REPLY_UR = ("Wah! 🌟 Apne business ko automation aur AI se aage le jana chahte ho, bohot achha! "
+                 "Maria WhatsApp bots, business software, AI assistants aur dashboards banati hain.\n\n"
+                 "Seedha baat karne ke liye yahan click karo:\n"
+                 "👉 wa.me/923153205484\n\n"
+                 "Main connect karwati hoon! 💛")
+
+# Common Roman Urdu words, used to pick the language of the fixed replies
+URDU_HINTS = {
+    'kya', 'hai', 'hain', 'hoon', 'hun', 'mein', 'mujhe', 'aap', 'tum', 'nahi', 'nhi',
+    'kaise', 'kese', 'kesi', 'kaisi', 'haal', 'acha', 'achha', 'theek', 'thik', 'bohat', 'bohot',
+    'shukriya', 'meherbani', 'mehrbani', 'karo', 'kro', 'krna', 'karna', 'chahiye', 'chahye',
+    'kitna', 'kitne', 'lagega', 'banwana', 'bnwana', 'mera', 'meri', 'yaar', 'jee',
+    'abhi', 'aaj', 'kaam', 'baat', 'krein', 'karein', 'batao', 'btao', 'salam', 'jazakallah'
+}
+
+def is_urdu(text):
+    if any('\u0600' <= ch <= '\u06FF' for ch in text):
+        return True
+    return bool(set(re.findall(r"[a-z]+", text.lower())) & URDU_HINTS)
 
 GRATITUDE_RESPONSES = [
     "Arey yaar, yeh sun ke dil khush ho gaya! 🥰 Aap bhi bohot pyaari hain — Allah aapko hamesha khush rakhe!",
@@ -69,7 +110,7 @@ def get_claude_response(user_message, conversation_history):
 
 WHO YOU ARE
 - You are an AI assistant, not Maria. If someone asks "is this Maria?" or "are you a bot?",
-  say warmly: "Main Marist hoon, Maria ka AI assistant." Never pretend to be a human.
+  say warmly: "I'm Marist, Maria's AI assistant." Never pretend to be a human.
 
 YOUR PURPOSE: MOTIVATION FOR GROWTH
 You motivate people, especially business owners, freelancers and people starting something,
@@ -85,9 +126,13 @@ and help them believe they can grow with automation and AI.
 If someone is sad or stressed, be kind and listen first, then gently lift their mood.
 Do not ignore or dismiss what they feel.
 
-LANGUAGE: ONLY Roman Urdu (Urdu written in English letters), like
-"Heyy! Kya haal hai? Chalo aaj ek chhota qadam uthate hain!". Never use Urdu script.
-Keep words like AI, automation, WhatsApp, online store in English.
+LANGUAGE
+- Default: simple, friendly English.
+- Reply in the language of the person's latest message: English message -> English reply.
+  Roman Urdu message (Urdu in English letters, e.g. "kya haal hai") -> Roman Urdu reply.
+- If the person asks for a language ("talk in English", "Urdu mein baat karo"), use it
+  for the rest of the chat until they ask otherwise.
+- Never use Urdu script.
 
 STYLE
 - Warm, caring, strong and casual, like a supportive elder sister or mentor.
@@ -124,7 +169,7 @@ STYLE
         return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
     except Exception as e:
         print(f"Claude error: {e}")
-        return "Yaar abhi thodi der ke liye available nahi hoon, thodi der baad try karo! 💛"
+        return "Sorry, I'm not available for a little while. Please try again soon! 💛"
 
 # ─── Send WhatsApp message ────────────────────────────────────
 def send_whatsapp_message(to, message):
@@ -204,13 +249,13 @@ def webhook():
                 
                 # ── Gratitude check ──
                 if is_gratitude(incoming_text):
-                    reply = random.choice(GRATITUDE_RESPONSES)
+                    reply = random.choice(GRATITUDE_RESPONSES if is_urdu(incoming_text) else GRATITUDE_RESPONSES_EN)
                     send_whatsapp_message(from_number, reply)
                     return 'OK', 200
                 
                 # ── Serious message: real help + alert Maria ──
                 if is_serious(incoming_text):
-                    send_whatsapp_message(from_number, SERIOUS_REPLY)
+                    send_whatsapp_message(from_number, SERIOUS_REPLY if is_urdu(incoming_text) else SERIOUS_REPLY_EN)
                     alert = (f"🚨 *SERIOUS MESSAGE — Marist Alert*\n\n"
                             f"From: {from_number}\n"
                             f"Message: \"{incoming_text}\"\n\n"
@@ -221,11 +266,7 @@ def webhook():
 
                 # ── Hire/work query ──
                 if is_hire_query(incoming_text):
-                    reply = ("Wah! 🌟 Apne business ko automation aur AI se aage le jana chahte ho, bohot achha! "
-                            "Maria WhatsApp bots, business software, AI assistants aur dashboards banati hain.\n\n"
-                            "Seedha baat karne ke liye yahan click karo:\n"
-                            "👉 wa.me/923153205484\n\n"
-                            "Main connect karwati hoon! 💛")
+                    reply = HIRE_REPLY_UR if is_urdu(incoming_text) else HIRE_REPLY_EN
                     send_whatsapp_message(from_number, reply)
                     return 'OK', 200
                 
