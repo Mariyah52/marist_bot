@@ -10,6 +10,7 @@ VERIFY_TOKEN = "marist_bot_token"
 WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 
 # Maria's number for alerts
 MARIA_NUMBER = "923153205484"
@@ -40,18 +41,19 @@ GRATITUDE_WORDS = [
 ]
 
 HIRE_WORDS = [
-    'hire', 'project', 'work', 'collaborate', 'kaam', 'service',
-    'price', 'rate', 'cost', 'quote', 'kitna', 'available',
-    'freelance', 'contact', 'meet', 'discuss', 'portfolio'
+    'hire', 'hiring', 'price', 'pricing', 'quote', 'cost', 'kitna lagega', 'kitne ka',
+    'charges', 'collaborate', 'banwana', 'bnwana', 'project banwana', 'order dena'
 ]
 
-# ─── Motivational redirects ────────────────────────────────────
-REDIRECTS = [
-    "Yaar, main sun rahi hoon 💛 Lekin aaj hum sirf roshan baatein karenge! Aap bohot strong hain — mushkilein hain par aap se badi nahi. Ek achhi baat batao aaj! 🌟",
-    "Himmat rakho! Aap se zyada brave koi nahi 💪 Chalo aage badhte hain — aaj ka din aapka hai!",
-    "Aap bohot khaas hain 🌸 Main jaanti hoon life mushkil lagti hai kabhi kabhi, lekin aap har mushkil se guzri hain. Aaj ek choti si khushi share karo!",
-    "Main yahan hoon aapke liye 💛 Lekin aaj hum sirf positive baatein karenge. Aap meri himmat hain!"
-]
+# ─── Reply when someone may be in danger ──────────────────────
+SERIOUS_REPLY = (
+    "Aap ne mujhe bataya, yeh himmat ki baat hai 💛 Aap ki zindagi bohat qeemti hai "
+    "aur aap ko yeh sab akele nahi uthana.\n\n"
+    "Main ek AI assistant hoon, is liye abhi kisi insaan se baat karna sab se zaroori hai: "
+    "kisi apne se, ya Umang helpline se: 0311 7786264.\n"
+    "Agar foran khatra ho to 1122 par call karein.\n\n"
+    "Maria ko bhi bata diya gaya hai. 🤍"
+)
 
 GRATITUDE_RESPONSES = [
     "Arey yaar, yeh sun ke dil khush ho gaya! 🥰 Aap bhi bohot pyaari hain — Allah aapko hamesha khush rakhe!",
@@ -63,23 +65,34 @@ import random
 
 # ─── Claude AI response ───────────────────────────────────────
 def get_claude_response(user_message, conversation_history):
-    system_prompt = """You are Marist — you ARE Maria Aziz herself. Friends and family think they are talking to Maria directly. Never reveal you are an AI or a bot. If someone asks "is this Maria?" say yes warmly.
+    system_prompt = """You are Marist, Maria Aziz's AI assistant on WhatsApp. Maria is the founder of IMADI Tech (www.imadi.tech).
 
-Your personality: warm, caring, motivational, strong and casual — like a loving sister. Mix of all these.
+WHO YOU ARE
+- You are an AI assistant, not Maria. If someone asks "is this Maria?" or "are you a bot?",
+  say warmly: "Main Marist hoon, Maria ka AI assistant." Never pretend to be a human.
 
-LANGUAGE RULE: ONLY respond in Roman Urdu. NEVER use English. NEVER use Urdu script. Only Roman Urdu like: "Heyy! Kya haal hai? Main yahan hoon!"
+YOUR PURPOSE: MOTIVATION FOR GROWTH
+You motivate people, especially business owners, freelancers and people starting something,
+and help them believe they can grow with automation and AI.
+1. Encourage first: make them feel their goal is possible.
+2. Understand: ask what they do or want to achieve. Ask only ONE question at a time.
+3. Growth idea: suggest one or two simple ways automation or AI could help them, for example
+   a WhatsApp bot that replies to customers and takes orders, automatic invoices and follow-ups,
+   a simple online store, a sales dashboard, or AI to write posts and replies.
+4. Small step: give one small action for this week, plus a short line of motivation.
+5. If they want help building it, warmly share Maria's WhatsApp: wa.me/923153205484.
+   Don't push this in every message.
+If someone is sad or stressed, be kind and listen first, then gently lift their mood.
+Do not ignore or dismiss what they feel.
 
-Maria's services (if asked about work/hire):
-- AI Chatbot Development
-- WhatsApp Bot Automation  
-- Data Analytics Dashboards
-- NLP & Sentiment Analysis
-- Portfolio & Web Development
-- Research & Data Science
+LANGUAGE: ONLY Roman Urdu (Urdu written in English letters), like
+"Heyy! Kya haal hai? Chalo aaj ek chhota qadam uthate hain!". Never use Urdu script.
+Keep words like AI, automation, WhatsApp, online store in English.
 
-If someone wants to hire or discuss a project, tell them warmly and redirect them to WhatsApp: wa.me/923153205484
-
-Always be positive, uplifting and motivational. Never engage with negative or hopeless thoughts."""
+STYLE
+- Warm, caring, strong and casual, like a supportive elder sister or mentor.
+- Short replies: 2-4 sentences. WhatsApp-friendly, an emoji or two is fine.
+- Never invent prices, delivery dates or guarantees. Pricing needs a chat with Maria."""
 
     try:
         headers = {
@@ -91,7 +104,7 @@ Always be positive, uplifting and motivational. Never engage with negative or ho
         messages = conversation_history + [{"role": "user", "content": user_message}]
         
         payload = {
-            "model": "claude-haiku-20240307",
+            "model": ANTHROPIC_MODEL,
             "max_tokens": 300,
             "system": system_prompt,
             "messages": messages
@@ -105,7 +118,10 @@ Always be positive, uplifting and motivational. Never engage with negative or ho
         )
         
         data = response.json()
-        return data['content'][0]['text']
+        if response.status_code != 200:
+            print(f"Claude HTTP error: {response.status_code} {data}")
+            raise RuntimeError("Claude error")
+        return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
     except Exception as e:
         print(f"Claude error: {e}")
         return "Yaar abhi thodi der ke liye available nahi hoon, thodi der baad try karo! 💛"
@@ -188,29 +204,21 @@ def webhook():
                     send_whatsapp_message(from_number, reply)
                     return 'OK', 200
                 
-                # ── Negative word check ──
-                if is_negative(incoming_text):
-                    serious = is_serious(incoming_text)
-                    
-                    # Send motivational redirect
-                    reply = random.choice(REDIRECTS)
-                    send_whatsapp_message(from_number, reply)
-                    
-                    # Alert Maria if serious
-                    if serious:
-                        alert = (f"🚨 *SERIOUS MESSAGE — Marist Alert*\n\n"
-                                f"From: {from_number}\n"
-                                f"Message: \"{incoming_text}\"\n\n"
-                                f"Yeh banda/bandi mushkil mein lag raha/rahi hai. "
-                                f"Please directly WhatsApp pe reply karo! 💛")
-                        send_whatsapp_message(MARIA_NUMBER, alert)
-                    
+                # ── Serious message: real help + alert Maria ──
+                if is_serious(incoming_text):
+                    send_whatsapp_message(from_number, SERIOUS_REPLY)
+                    alert = (f"🚨 *SERIOUS MESSAGE — Marist Alert*\n\n"
+                            f"From: {from_number}\n"
+                            f"Message: \"{incoming_text}\"\n\n"
+                            f"Yeh banda/bandi mushkil mein lag raha/rahi hai. "
+                            f"Please directly WhatsApp pe reply karo! 💛")
+                    send_whatsapp_message(MARIA_NUMBER, alert)
                     return 'OK', 200
-                
+
                 # ── Hire/work query ──
                 if is_hire_query(incoming_text):
-                    reply = ("Wah! 🌟 Maria se kaam karwana chahte ho — bohot achha! "
-                            "Maria AI chatbots, WhatsApp bots, dashboards aur data science projects karti hain.\n\n"
+                    reply = ("Wah! 🌟 Apne business ko automation aur AI se aage le jana chahte ho, bohot achha! "
+                            "Maria WhatsApp bots, business software, AI assistants aur dashboards banati hain.\n\n"
                             "Seedha baat karne ke liye yahan click karo:\n"
                             "👉 wa.me/923153205484\n\n"
                             "Main connect karwati hoon! 💛")
