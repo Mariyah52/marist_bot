@@ -131,12 +131,10 @@ If someone is sad or stressed, be kind and listen first, then gently lift their 
 Do not ignore or dismiss what they feel.
 
 LANGUAGE
-- Default: simple, friendly English.
-- Reply in the language of the person's latest message: English message -> English reply.
-  Roman Urdu message (Urdu in English letters, e.g. "kya haal hai") -> Roman Urdu reply.
-- If the person asks for a language ("talk in English", "Urdu mein baat karo"), use it
-  for the rest of the chat until they ask otherwise.
-- Never use Urdu script.
+- Always reply in simple, friendly American English, whatever language the person writes in
+  (including Roman Urdu or Urdu). Use American spelling and phrasing (color, organize, center,
+  "awesome", "you got this").
+- If someone writes in another language, you can understand it, but answer in American English.
 
 STYLE: chat like a real person on WhatsApp, not like an article.
 - Keep every reply SHORT: 1-3 short sentences, under 50 words.
@@ -269,10 +267,16 @@ def webhook():
             if msg_type == 'text':
                 incoming_text = message_data['text']['body']
                 print(f"Message from {from_number}: {incoming_text}")
-                
+
+                # ── Data deletion request (promised on the /data-deletion page) ──
+                if incoming_text.strip().upper().rstrip('.!') == 'DELETE MY DATA':
+                    conversation_store.pop(from_number, None)
+                    send_whatsapp_message(from_number, "Done. I've cleared our conversation history for your number.")
+                    return 'OK', 200
+
                 # ── Gratitude check ──
                 if is_gratitude(incoming_text):
-                    reply = random.choice(GRATITUDE_RESPONSES if is_urdu(incoming_text) else GRATITUDE_RESPONSES_EN)
+                    reply = random.choice(GRATITUDE_RESPONSES_EN)
                     send_whatsapp_message(from_number, reply)
                     return 'OK', 200
                 
@@ -289,7 +293,7 @@ def webhook():
 
                 # ── Hire/work query ──
                 if is_hire_query(incoming_text):
-                    reply = HIRE_REPLY_UR if is_urdu(incoming_text) else HIRE_REPLY_EN
+                    reply = HIRE_REPLY_EN
                     send_whatsapp_message(from_number, reply)
                     return 'OK', 200
                 
@@ -314,6 +318,59 @@ def webhook():
             print(f"Error: {e}")
         
         return 'OK', 200
+
+# ─── Public pages Meta asks for (privacy policy, data deletion) ───
+PAGE_STYLE = ("body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:720px;"
+              "margin:40px auto;padding:0 16px;line-height:1.6;color:#1f2933}h1{font-size:26px}"
+              "h2{font-size:18px;margin-top:28px}a{color:#0b6e99}")
+
+PRIVACY_HTML = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marist Privacy Policy</title><style>{PAGE_STYLE}</style></head><body>
+<h1>Marist Privacy Policy</h1>
+<p>Last updated: 18 October 2026</p>
+<p>Marist is a WhatsApp assistant run by IMADI Tech (<a href="https://www.imadi.tech">www.imadi.tech</a>).
+It chats with people about growing their work with automation and AI.</p>
+<h2>What we receive</h2>
+<p>When you message Marist on WhatsApp, we receive your WhatsApp phone number, your profile name
+and the text of your messages, through Meta's WhatsApp Business Platform.</p>
+<h2>How we use it</h2>
+<p>Only to write Marist's replies to you. To do this, your message text is sent to an AI service
+(Anthropic) that generates the reply. We do not use your messages for advertising and we do not sell them.</p>
+<h2>How long we keep it</h2>
+<p>Marist keeps only your last few messages in the server's temporary memory so the conversation makes
+sense. They are not saved in a database and are erased whenever the server restarts.
+WhatsApp and Meta keep their own records under
+<a href="https://www.whatsapp.com/legal/privacy-policy">WhatsApp's Privacy Policy</a>.</p>
+<h2>Your choices</h2>
+<p>You can stop at any time by not messaging Marist, or by blocking the number in WhatsApp.
+To ask for your data to be removed, see <a href="/data-deletion">Data deletion</a>.</p>
+<h2>Contact</h2>
+<p>Questions: <a href="https://www.imadi.tech/contact/">www.imadi.tech/contact</a></p>
+</body></html>"""
+
+DELETION_HTML = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marist Data Deletion</title><style>{PAGE_STYLE}</style></head><body>
+<h1>Delete your Marist data</h1>
+<p>Marist does not store your messages in a database. The last few messages are held only in temporary
+memory to keep the conversation going and are erased when the server restarts.</p>
+<p>If you still want us to confirm removal, send the message <b>DELETE MY DATA</b> to Marist on WhatsApp,
+or write to us through <a href="https://www.imadi.tech/contact/">www.imadi.tech/contact</a>.
+We will clear anything held for your number within 7 days.</p>
+<p>See also the <a href="/privacy">Privacy Policy</a>.</p>
+</body></html>"""
+
+
+@app.route('/privacy')
+def privacy():
+    return PRIVACY_HTML, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+
+@app.route('/data-deletion')
+def data_deletion():
+    return DELETION_HTML, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
