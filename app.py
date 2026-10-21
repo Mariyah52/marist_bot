@@ -59,19 +59,10 @@ SERIOUS_REPLY_EN = (
     "Maria has been informed too. 🤍"
 )
 
-SERIOUS_REPLY = (
-    "Aap ne mujhe bataya, yeh himmat ki baat hai 💛 Aap ki zindagi bohat qeemti hai "
-    "aur aap ko yeh sab akele nahi uthana.\n\n"
-    "Main ek AI assistant hoon, is liye abhi kisi insaan se baat karna sab se zaroori hai: "
-    "kisi apne se, ya Umang helpline se: 0311 7786264.\n"
-    "Agar foran khatra ho to 1122 par call karein.\n\n"
-    "Maria ko bhi bata diya gaya hai. 🤍"
-)
-
 GRATITUDE_RESPONSES_EN = [
-    "Aww, that made my day! 🥰 Wishing you lots of success, you've got this!",
+    "Happy to help! 😊 Tell me anytime if you want ideas for your next project.",
     "Thank you so much 💛 Your kind words mean a lot. Take care!",
-    "So sweet of you! 🌸 Keep going, good things are coming your way!"
+    "You're welcome! If you want to talk through an automation idea, I'm here."
 ]
 
 HIRE_REPLY_EN = ("Love that! 🌟 Taking your business further with automation and AI is a great move. "
@@ -79,32 +70,6 @@ HIRE_REPLY_EN = ("Love that! 🌟 Taking your business further with automation a
                  "Chat with her directly here:\n"
                  "👉 wa.me/923153205484\n\n"
                  "She'll be happy to help! 💛")
-
-HIRE_REPLY_UR = ("Wah! 🌟 Apne business ko automation aur AI se aage le jana chahte ho, bohot achha! "
-                 "Maria WhatsApp bots, business software, AI assistants aur dashboards banati hain.\n\n"
-                 "Seedha baat karne ke liye yahan click karo:\n"
-                 "👉 wa.me/923153205484\n\n"
-                 "Main connect karwati hoon! 💛")
-
-# Common Roman Urdu words, used to pick the language of the fixed replies
-URDU_HINTS = {
-    'kya', 'hai', 'hain', 'hoon', 'hun', 'mein', 'mujhe', 'aap', 'tum', 'nahi', 'nhi',
-    'kaise', 'kese', 'kesi', 'kaisi', 'haal', 'acha', 'achha', 'theek', 'thik', 'bohat', 'bohot',
-    'shukriya', 'meherbani', 'mehrbani', 'karo', 'kro', 'krna', 'karna', 'chahiye', 'chahye',
-    'kitna', 'kitne', 'lagega', 'banwana', 'bnwana', 'mera', 'meri', 'yaar', 'jee',
-    'abhi', 'aaj', 'kaam', 'baat', 'krein', 'karein', 'batao', 'btao', 'salam', 'jazakallah'
-}
-
-def is_urdu(text):
-    if any('\u0600' <= ch <= '\u06FF' for ch in text):
-        return True
-    return bool(set(re.findall(r"[a-z]+", text.lower())) & URDU_HINTS)
-
-GRATITUDE_RESPONSES = [
-    "Arey yaar, yeh sun ke dil khush ho gaya! 🥰 Aap bhi bohot pyaari hain — Allah aapko hamesha khush rakhe!",
-    "Shukriya aapka 💛 Aap ki dua meri himmat hai! Aap bhi take care karo!",
-    "Itna pyaar! 🌸 Allah aapko bhi khushiyan de — aap deserve karti hain sab achha!"
-]
 
 import random
 
@@ -116,23 +81,23 @@ WHO YOU ARE
 - You are an AI assistant, not Maria. If someone asks "is this Maria?" or "are you a bot?",
   say warmly: "I'm Marist, Maria's AI assistant." Never pretend to be a human.
 
-YOUR PURPOSE: MOTIVATION FOR GROWTH
-You motivate people, especially business owners, freelancers and people starting something,
-and help them believe they can grow with automation and AI.
-1. Encourage first: make them feel their goal is possible.
-2. Understand: ask what they do or want to achieve. Ask only ONE question at a time.
-3. Growth idea: suggest one or two simple ways automation or AI could help them, for example
-   a WhatsApp bot that replies to customers and takes orders, automatic invoices and follow-ups,
-   a simple online store, a sales dashboard, or AI to write posts and replies.
-4. Small step: give one small action for this week, plus a short line of motivation.
-5. If they want help building it, warmly share Maria's WhatsApp: wa.me/923153205484.
-   Don't push this in every message.
-If someone is sad or stressed, be kind and listen first, then gently lift their mood.
-Do not ignore or dismiss what they feel.
+YOUR PURPOSE: UNDERSTAND THE PROJECT AND SUGGEST AUTOMATION IDEAS
+You help business owners figure out what they could automate or build, and point them to Maria.
+1. Find out what their business does and what they want to build or improve.
+   Ask only ONE question at a time, for example: "What does your business do?",
+   "What would you like to automate?", "Which part of your work takes the most time?"
+2. Clarify the type of automation they need, for example a WhatsApp bot that answers customers
+   and takes orders, automatic invoices and follow-ups, a CRM, a sales or stock dashboard,
+   an online store, or an AI assistant for their website.
+3. Suggest one or two practical ideas that fit what they told you, in plain words.
+4. When the project is clear or they want it built, share Maria's WhatsApp to discuss it:
+   wa.me/923153205484. Don't push this in every message.
+Stay focused on their business and project. Don't give motivational speeches.
+If someone is clearly upset, be kind and brief, then gently return to how you can help.
 
 LANGUAGE
-- Always reply in simple, friendly American English, whatever language the person writes in
-  (including Roman Urdu or Urdu). Use American spelling and phrasing (color, organize, center,
+- Always reply in simple, friendly American English, whatever language the person writes in.
+  Use American spelling and phrasing (color, organize, center,
   "awesome", "you got this").
 - If someone writes in another language, you can understand it, but answer in American English.
 
@@ -142,7 +107,7 @@ STYLE: chat like a real person on WhatsApp, not like an article.
 - Give one idea at a time. If there is more to say, wait for their reply.
 - Ask at most ONE question, and not in every message.
 - Don't repeat greetings or re-introduce yourself mid-conversation.
-- Warm, caring and casual, like a supportive mentor. One emoji at most.
+- Friendly and professional, like a helpful consultant. One emoji at most.
 - Never invent prices, delivery dates or guarantees. Pricing needs a chat with Maria."""
 
     try:
@@ -282,12 +247,12 @@ def webhook():
                 
                 # ── Serious message: real help + alert Maria ──
                 if is_serious(incoming_text):
-                    send_whatsapp_message(from_number, SERIOUS_REPLY if is_urdu(incoming_text) else SERIOUS_REPLY_EN)
+                    send_whatsapp_message(from_number, SERIOUS_REPLY_EN)
                     alert = (f"🚨 *SERIOUS MESSAGE — Marist Alert*\n\n"
                             f"From: {from_number}\n"
                             f"Message: \"{incoming_text}\"\n\n"
-                            f"Yeh banda/bandi mushkil mein lag raha/rahi hai. "
-                            f"Please directly WhatsApp pe reply karo! 💛")
+                            f"This person may be in trouble. "
+                            f"Please reply to them directly on WhatsApp. 💛")
                     send_whatsapp_message(MARIA_NUMBER, alert)
                     return 'OK', 200
 
