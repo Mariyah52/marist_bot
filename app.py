@@ -1,6 +1,7 @@
 import os
 import re
 import requests
+import threading
 import time
 from collections import deque
 from flask import Flask, request
@@ -13,6 +14,10 @@ WHATSAPP_TOKEN = (os.environ.get("WHATSAPP_TOKEN") or "").strip()
 PHONE_NUMBER_ID = (os.environ.get("PHONE_NUMBER_ID") or "").strip()
 ANTHROPIC_API_KEY = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
+
+# Google Sheet logging (see the Code.gs in the marist-ai repo). Off unless both are set.
+SHEET_WEBHOOK_URL = (os.environ.get("SHEET_WEBHOOK_URL") or "").strip()
+SHEET_WEBHOOK_KEY = (os.environ.get("SHEET_WEBHOOK_KEY") or "").strip()
 
 # Maria's number for alerts
 MARIA_NUMBER = "923153205484"
@@ -168,6 +173,46 @@ def send_whatsapp_message(to, message):
         print(f"Error sending message: {e}")
         return False
 
+# ─── Google Sheet: one row per WhatsApp number ───────────────
+INTERESTS = [
+    ("whatsapp", "WhatsApp Automation"), ("chatbot", "WhatsApp Automation"), ("bot", "WhatsApp Automation"),
+    ("instagram", "Marketing Automation"), ("facebook", "Marketing Automation"), ("marketing", "Marketing Automation"),
+    ("post", "Marketing Automation"), ("email", "Email Follow-up Automation"), ("follow up", "Email Follow-up Automation"),
+    ("erp", "ERP / Business Software"), ("invoice", "ERP / Business Software"), ("stock", "ERP / Business Software"),
+    ("inventory", "ERP / Business Software"), ("crm", "CRM / Lead Management"), ("lead", "CRM / Lead Management"),
+    ("dashboard", "Dashboard / Reports"), ("website", "Website / Web App"), ("app", "Website / Web App"),
+]
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+def guess_interest(texts):
+    joined = " ".join(texts).lower()
+    for word, label in INTERESTS:
+        if re.search(r"\b" + re.escape(word), joined):
+            return label
+    return ""
+
+
+def _sheet_post(payload):
+    try:
+        requests.post(SHEET_WEBHOOK_URL, json=payload, timeout=15, allow_redirects=False)
+    except Exception as e:
+        print(f"Sheet log failed: {e}")
+
+
+def log_to_sheet(number, name, message, reply):
+    """Adds or updates this person's row in Maria's Google Sheet, in the background."""
+    if not SHEET_WEBHOOK_URL:
+        return
+    said = [m["content"] for m in conversation_store.get(number, []) if m["role"] == "user"] + [message]
+    email = next((m.group(0) for t in reversed(said) for m in [EMAIL_RE.search(t)] if m), "")
+    payload = {
+        "key": SHEET_WEBHOOK_KEY, "conversation": f"wa:{number}", "channel": "WhatsApp (Marist)",
+        "whatsapp": "+" + number, "email": email, "name": name or "", "interest": guess_interest(said),
+        "message": message[:1000], "reply": (reply or "")[:1000],
+    }
+    threading.Thread(target=_sheet_post, args=(payload,), daemon=True).start()
+
 # ─── Check word lists ─────────────────────────────────────────
 def is_negative(text):
     text_lower = text.lower()
@@ -227,6 +272,7 @@ def webhook():
             except ValueError:
                 pass
             from_number = message_data['from']
+            profile_name = ((value.get('contacts') or [{}])[0].get('profile') or {}).get('name', '')
             msg_type = message_data.get('type', '')
             
             if msg_type == 'text':
@@ -236,13 +282,16 @@ def webhook():
                 # ── Data deletion request (promised on the /data-deletion page) ──
                 if incoming_text.strip().upper().rstrip('.!') == 'DELETE MY DATA':
                     conversation_store.pop(from_number, None)
-                    send_whatsapp_message(from_number, "Done. I've cleared our conversation history for your number.")
+                    send_whatsapp_message(from_number, "Done. I've cleared our conversation history for your number. Maria will also remove your follow-up record within 7 days.")
+                    alert = f"🗑️ Data deletion request from +{from_number}. Please delete their row in the Marist leads sheet."
+                    send_whatsapp_message(MARIA_NUMBER, alert)
                     return 'OK', 200
 
                 # ── Gratitude check ──
                 if is_gratitude(incoming_text):
                     reply = random.choice(GRATITUDE_RESPONSES_EN)
                     send_whatsapp_message(from_number, reply)
+                    log_to_sheet(from_number, profile_name, incoming_text, reply)
                     return 'OK', 200
                 
                 # ── Serious message: real help + alert Maria ──
@@ -260,6 +309,7 @@ def webhook():
                 if is_hire_query(incoming_text):
                     reply = HIRE_REPLY_EN
                     send_whatsapp_message(from_number, reply)
+                    log_to_sheet(from_number, profile_name, incoming_text, reply)
                     return 'OK', 200
                 
                 # ── Normal Claude AI response ──
@@ -268,6 +318,7 @@ def webhook():
                 
                 history = conversation_store[from_number][-6:]  # last 3 turns
                 reply = get_claude_response(incoming_text, history)
+                log_to_sheet(from_number, profile_name, incoming_text, reply)
                 
                 # Update history
                 conversation_store[from_number].append({"role": "user", "content": incoming_text})
@@ -293,18 +344,21 @@ PRIVACY_HTML = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Marist Privacy Policy</title><style>{PAGE_STYLE}</style></head><body>
 <h1>Marist Privacy Policy</h1>
-<p>Last updated: 18 October 2026</p>
+<p>Last updated: 26 October 2026</p>
 <p>Marist is a WhatsApp assistant run by IMADI Tech (<a href="https://www.imadi.tech">www.imadi.tech</a>).
 It chats with people about growing their work with automation and AI.</p>
 <h2>What we receive</h2>
 <p>When you message Marist on WhatsApp, we receive your WhatsApp phone number, your profile name
 and the text of your messages, through Meta's WhatsApp Business Platform.</p>
 <h2>How we use it</h2>
-<p>Only to write Marist's replies to you. To do this, your message text is sent to an AI service
-(Anthropic) that generates the reply. We do not use your messages for advertising and we do not sell them.</p>
+<p>To write Marist's replies to you, your message text is sent to an AI service (Anthropic) that generates
+the reply. So that Maria can follow up about your project, we also keep a simple record in a private Google Sheet:
+your WhatsApp number, profile name, any email you share, the type of service you asked about, and your latest
+message with Marist's reply. We do not use your messages for advertising and we do not sell them.</p>
 <h2>How long we keep it</h2>
-<p>Marist keeps only your last few messages in the server's temporary memory so the conversation makes
-sense. They are not saved in a database and are erased whenever the server restarts.
+<p>Marist keeps your last few messages in the server's temporary memory so the conversation makes
+sense; these are erased whenever the server restarts. The follow-up record in the Google Sheet is kept until
+you ask us to delete it.
 WhatsApp and Meta keep their own records under
 <a href="https://www.whatsapp.com/legal/privacy-policy">WhatsApp's Privacy Policy</a>.</p>
 <h2>Your choices</h2>
@@ -318,11 +372,11 @@ DELETION_HTML = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Marist Data Deletion</title><style>{PAGE_STYLE}</style></head><body>
 <h1>Delete your Marist data</h1>
-<p>Marist does not store your messages in a database. The last few messages are held only in temporary
-memory to keep the conversation going and are erased when the server restarts.</p>
+<p>Marist holds your last few messages in temporary memory to keep the conversation going, and keeps a
+follow-up record (your number, name, any email you shared, and your latest message) in a private Google Sheet.</p>
 <p>If you still want us to confirm removal, send the message <b>DELETE MY DATA</b> to Marist on WhatsApp,
 or write to us through <a href="https://www.imadi.tech/contact/">www.imadi.tech/contact</a>.
-We will clear anything held for your number within 7 days.</p>
+We will clear anything held for your number, including the Google Sheet record, within 7 days.</p>
 <p>See also the <a href="/privacy">Privacy Policy</a>.</p>
 </body></html>"""
 
